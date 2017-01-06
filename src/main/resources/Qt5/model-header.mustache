@@ -1,0 +1,51 @@
+{{>licenseInfo}}
+{{#models}}{{#model}}/*
+ * {{classname}}.h
+ *
+ * {{description}}
+ */
+
+#ifndef _Swagger_{{classname}}_H_
+#define _Swagger_{{classname}}_H_
+
+#include "{{prefix}}Object.h"{{/model}}{{/models}}
+{{#imports}}{{{import}}}
+{{/imports}}
+
+
+{{#models}}{{#model}}
+namespace Swagger {
+
+class {{classname}}: public {{#parent}}{{parent}}{{/parent}}{{^parent}}{{prefix}}Object{{/parent}} {
+
+    {{#vars}}
+    {{{datatype}}} {{name}};
+    {{/vars}}
+
+    Q_OBJECT
+
+    {{#vars}}
+    Q_PROPERTY({{{datatype}}} {{name}} READ {{getter}} WRITE {{setter}})
+    {{/vars}}
+
+public:
+    {{classname}}(QObject *parent=0);
+    virtual ~{{classname}}();
+
+    QString asJson ();
+    QJsonObject asJsonObject();
+    void fromJsonObject(const QJsonObject &json);
+    void fromJson(const QString &jsonString);
+
+    {{#vars}}
+    {{{vendorExtensions.paramType}}} {{getter}}() const;
+    void {{setter}}({{{vendorExtensions.paramType}}} {{name}});
+
+    {{/vars}}
+};
+
+} /* namespace Swagger */
+
+#endif /* {{classname}}_H_ */
+{{/model}}
+{{/models}}

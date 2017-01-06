@@ -1,0 +1,44 @@
+{{>licenseInfo}}
+#ifndef _Swagger_ModelFactory_H_
+#define _Swagger_ModelFactory_H_
+
+#include <QString>
+#include <QMap>
+
+class QObject;
+
+namespace Swagger {
+
+  class {{prefix}}Object;
+
+  class {{prefix}}ObjectFactory
+  {
+  	public:
+	  	typedef {{prefix}}Object* (*Create{{prefix}}ObjectCallback)(QObject *parent);
+	  	static {{prefix}}ObjectFactory &Get();
+
+	  	bool Register(const QString &id, Create{{prefix}}ObjectCallback createFn);
+	  	bool Unregister(const QString &id);
+
+	  	{{prefix}}Object *Create{{prefix}}Object(QObject *parent, const QString &id);
+
+	  	bool isRegistered(const QString &id) const;
+
+		// delete copy and move constructors and assign operators
+		{{prefix}}ObjectFactory({{prefix}}ObjectFactory const&) = delete;             // Copy construct
+		{{prefix}}ObjectFactory({{prefix}}ObjectFactory&&) = delete;                  // Move construct
+		{{prefix}}ObjectFactory& operator=({{prefix}}ObjectFactory const&) = delete;  // Copy assign
+		{{prefix}}ObjectFactory& operator=({{prefix}}ObjectFactory &&) = delete;      // Move assign
+
+	protected:
+	    {{prefix}}ObjectFactory();
+	    virtual ~{{prefix}}ObjectFactory();
+
+	private:
+    	typedef QMap<QString, Create{{prefix}}ObjectCallback> CallbackMap;
+    	CallbackMap _callbacks;
+  };
+
+} /* namespace Swagger */
+
+#endif /* ModelFactory_H_ */

@@ -1,0 +1,49 @@
+{{>licenseInfo}}
+
+#include "{{prefix}}ModelFactory.h"
+
+using namespace Swagger;
+
+{{prefix}}ObjectFactory & {{prefix}}ObjectFactory::Get()
+{
+    // Since it's a static variable, if the class has already been created,
+    // It won't be created again.
+    // And it **is** thread-safe in C++11.
+
+    static {{prefix}}ObjectFactory myInstance;
+
+    // Return a reference to our instance.
+    return myInstance;
+}
+
+bool {{prefix}}ObjectFactory::Register(const QString &id, Create{{prefix}}ObjectCallback createFn)
+{
+    if (isRegistered(id))
+    {
+        return false;
+    }
+    _callbacks[id] = createFn;
+    return true;
+}
+
+bool {{prefix}}ObjectFactory::Unregister(const QString &id)
+{
+    return _callbacks.remove(id) == 1;
+}
+
+{{prefix}}Object *{{prefix}}ObjectFactory::Create{{prefix}}Object(QObject *parent, const QString &id)
+{
+    if (!isRegistered(id))
+    {
+        return nullptr;
+    }
+    return (_callbacks[id])(parent);
+}
+
+bool {{prefix}}ObjectFactory::isRegistered(const QString &id) const
+{
+    return _callbacks.contains(id);
+}
+
+{{prefix}}ObjectFactory::{{prefix}}ObjectFactory() {}
+{{prefix}}ObjectFactory::~{{prefix}}ObjectFactory() {}

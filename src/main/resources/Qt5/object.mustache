@@ -1,0 +1,35 @@
+{{>licenseInfo}}
+#ifndef _Swagger__{{prefix}}Object_H_
+#define _Swagger__{{prefix}}Object_H_
+
+#include <QObject>
+#include <QJsonValue>
+#include <QJsonObject>
+
+namespace Swagger {
+
+class {{prefix}}Object : public QObject {
+
+  Q_OBJECT
+
+  public:
+    {{prefix}}Object(QObject *parent) : QObject(parent) {}
+    virtual ~{{prefix}}Object() {}
+
+    virtual QJsonObject asJsonObject() {
+      return QJsonObject();
+    }
+
+    virtual void fromJson(const QString &jsonString) {
+        Q_UNUSED(jsonString);
+    }
+    virtual void fromJsonObject(const QJsonObject &json) {
+        Q_UNUSED(json);
+    }
+    virtual QString asJson() {
+        return QString("");
+    }
+};
+
+}
+#endif /* _{{prefix}}_OBJECT_H_ */

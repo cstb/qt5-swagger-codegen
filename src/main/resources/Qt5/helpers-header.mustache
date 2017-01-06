@@ -1,0 +1,20 @@
+{{>licenseInfo}}
+#ifndef _Swagger_{{prefix}}Helpers_H
+#define _Swagger_{{prefix}}Helpers_H
+
+#include <QJsonValue>
+
+class QObject;
+
+namespace Swagger {
+    void setValue(void* value, QJsonValue obj, const QString& type, const QString& complexType, QObject *parent = nullptr);
+    void toJsonArray(QList<void*>* value, QJsonArray* output, const QString& innerType);
+    void toJsonValue(const QString& name, void* value, QJsonObject* output, const QString& type);
+    bool isCompatibleJsonValue(const QString& type);
+    QString stringValue(const QString& value);
+    QString stringValue(qint32 value);
+    QString stringValue(qint64 value);
+    QString stringValue(bool value);
+}
+
+#endif // _Swagger_{{prefix}}Helpers_H

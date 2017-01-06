@@ -1,0 +1,91 @@
+{{>licenseInfo}}
+{{#models}}{{#model}}
+#include "{{classname}}.h"
+
+#include "{{prefix}}Helpers.h"
+#include "{{prefix}}ModelFactory.h"
+
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QObject>
+#include <QDebug>
+
+// create an anonymous namespace to make the function invisible from other modules
+namespace
+{
+    Swagger::{{prefix}}Object *Create{{classname}}(QObject *parent)
+    {
+        return new Swagger::{{classname}}(parent);
+    }
+    const bool registered = Swagger::{{prefix}}ObjectFactory::Get().Register("Swagger::{{classname}}", Create{{classname}});
+    const int id = qRegisterMetaType<Swagger::{{classname}} *>("Swagger::{{classname}} *");
+}
+
+namespace Swagger {
+
+{{classname}}::{{classname}}(QObject *parent)
+: {{prefix}}Object(parent){{#vars}}{{#vendorExtensions.isObject}}, {{name}}(nullptr){{/vendorExtensions.isObject}}{{/vars}}
+{
+}
+
+{{classname}}::~{{classname}}()
+{
+}
+
+void {{classname}}::fromJson(const QString &json)
+{
+    QByteArray array (json.toStdString().c_str());
+    QJsonDocument doc = QJsonDocument::fromJson(array);
+    QJsonObject jsonObject = doc.object();
+    this->fromJsonObject(jsonObject);
+}
+
+void {{classname}}::fromJsonObject(const QJsonObject &pJson)
+{
+    {{#vars}}
+    {{^isContainer}}{{#vendorExtensions.isObject}}::Swagger::setValue(&{{name}}, pJson["{{name}}"], "{{baseType}}", "{{complexType}}", this);{{/vendorExtensions.isObject}}{{^vendorExtensions.isObject}}::Swagger::setValue(&{{name}}, pJson["{{name}}"], "{{baseType}}", "{{complexType}}");{{/vendorExtensions.isObject}}{{/isContainer}}{{#isContainer}}{{#vendorExtensions.isInnerObject}}::Swagger::setValue(&{{name}}, pJson["{{name}}"], "{{baseType}}", "{{items.complexType}}", this);{{/vendorExtensions.isInnerObject}}{{^vendorExtensions.isInnerObject}}::Swagger::setValue(&{{name}}, pJson["{{name}}"], "{{baseType}}", "{{items.baseType}}");{{/vendorExtensions.isInnerObject}}{{/isContainer}}
+    {{/vars}}
+}
+
+QString {{classname}}::asJson ()
+{
+    QJsonDocument doc(this->asJsonObject());
+    QByteArray bytes = doc.toJson();
+    return QString(bytes);
+}
+
+QJsonObject {{classname}}::asJsonObject()
+{
+    QJsonObject obj;
+    {{#vars}}
+    {{#vendorExtensions.isObject}}obj["{{name}}"] = {{name}}->asJsonObject();{{/vendorExtensions.isObject}}{{^vendorExtensions.isObject}}{{#isContainer}}
+    QJsonArray {{name}}JsonArray;
+    foreach(auto e, {{name}})
+    {
+        {{^vendorExtensions.isInnerObject}}{{name}}JsonArray.append(QJsonValue::fromVariant(QVariant(e)));{{/vendorExtensions.isInnerObject}}{{#vendorExtensions.isInnerObject}}{{name}}JsonArray.append(e->asJsonObject());{{/vendorExtensions.isInnerObject}}
+    }
+    obj["{{name}}"] = {{name}}JsonArray;{{/isContainer}}{{^isContainer}}obj["{{name}}"] = QJsonValue::fromVariant(QVariant({{name}}));{{/isContainer}}{{/vendorExtensions.isObject}}
+    {{/vars}}
+
+    return obj;
+}
+
+{{#vars}}
+
+{{{vendorExtensions.paramType}}} {{classname}}::{{getter}}() const
+{
+    return {{name}};
+}
+
+void {{classname}}::{{setter}}({{{vendorExtensions.paramType}}} {{name}})
+{
+    this->{{name}} = {{name}};
+}
+
+{{/vars}}
+
+
+} /* namespace Swagger */
+
+{{/model}}
+{{/models}}

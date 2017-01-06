@@ -1,0 +1,240 @@
+{{>licenseInfo}}
+#include "{{prefix}}Helpers.h"
+#include "{{prefix}}ModelFactory.h"
+#include "{{prefix}}Object.h"
+#include <QDebug>
+#include <QJsonArray>
+#include <QJsonValue>
+#include <QDateTime>
+#include <QtDebug>
+
+namespace Swagger {
+
+void
+setValue(void* value, QJsonValue obj, const QString& type, const QString& complexType, QObject *parent) {
+    if(value == nullptr) {
+        // can't set value with a null pointer
+        return;
+    }
+    if(QStringLiteral("bool").compare(type) == 0) {
+        bool * val = static_cast<bool*>(value);
+        *val = obj.toBool();
+    }
+    else if(QStringLiteral("qint32").compare(type) == 0) {
+        qint32 *val = static_cast<qint32*>(value);
+        *val = obj.toInt();
+    }
+    else if(QStringLiteral("qint64").compare(type) == 0) {
+        qint64 *val = static_cast<qint64*>(value);
+        *val = obj.toInt();
+    }
+    else if(QStringLiteral("float").compare(type) == 0) {
+        float *val = static_cast<float*>(value);
+        *val = obj.toDouble();
+    }
+    else if(QStringLiteral("double").compare(type) == 0) {
+        double *val = static_cast<double*>(value);
+        *val = obj.toDouble();
+    }
+    else if (QStringLiteral("QString").compare(type) == 0) {
+        QString *val = static_cast<QString*>(value);
+        *val = obj.toString();
+    }
+    else if (QStringLiteral("QDateTime").compare(type) == 0) {
+        QDateTime *val = static_cast<QDateTime*>(value);
+        *val = QDateTime::fromString(obj.toString(), Qt::ISODate);
+    }
+    else if (QStringLiteral("QDate").compare(type) == 0) {
+        QDate *val = static_cast<QDate*>(value);
+        *val = QDate::fromString(obj.toString(), Qt::ISODate);
+    }
+    else if (QStringLiteral("QByteArray").compare(type) == 0) {
+        QByteArray *val = static_cast<QByteArray*>(value);
+        *val = QByteArray::fromBase64(obj.toString().toLatin1());
+    }
+    else if(type.startsWith("{{prefix}}") && obj.isObject()) {
+        // complex type
+        QJsonObject jsonObj = obj.toObject();
+        {{prefix}}Object * so = Swagger::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "Swagger::" + type);
+        if(so != nullptr) {
+            so->fromJsonObject(jsonObj);
+            {{prefix}}Object **val = static_cast<{{prefix}}Object**>(value);
+            *val = so;
+        }
+    }
+    else if(type.startsWith("QList") && obj.isArray()) {
+        QJsonArray arr = obj.toArray();
+        if(complexType.startsWith("{{prefix}}")) {
+            // list of pointer on QObject inheritated object
+            QList<{{prefix}}Object *> output;
+            foreach (const QJsonValue & jval, arr) {
+                // it's an object
+                {{prefix}}Object * val = Swagger::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "Swagger::" + complexType);
+                val->fromJsonObject(jval.toObject());
+                output.append(val);
+            }
+            QList<{{prefix}}Object*> *val = static_cast<QList<{{prefix}}Object*> *>(value);
+            *val = output;
+        }
+        else {
+            // primitives
+            if(QStringLiteral("qint32").compare(complexType) == 0) {
+                QList<qint32> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append((qint32) jval.toInt());
+                }
+                QList<qint32> *val = static_cast<QList<qint32> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("qint64").compare(complexType) == 0) {
+                QList<qint64> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append((qint64) jval.toInt());
+                }
+                QList<qint64> *val = static_cast<QList<qint64> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("bool").compare(complexType) == 0) {
+                QList<bool> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append((bool) jval.toBool());
+                }
+                QList<bool> *val = static_cast<QList<bool> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("float").compare(complexType) == 0) {
+                QList<float> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append((float) jval.toDouble());
+                }
+                QList<float> *val = static_cast<QList<float> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("double").compare(complexType) == 0) {
+                QList<double> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append(jval.toDouble());
+                }
+                QList<double> *val = static_cast<QList<double> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("QString").compare(complexType) == 0) {
+                QList<QString> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append(jval.toString());
+                }
+                QList<QString> *val = static_cast<QList<QString> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("QDate").compare(complexType) == 0) {
+                QList<QDate> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append(QDate::fromString(jval.toString(), Qt::ISODate));
+                }
+                QList<QDate> *val = static_cast<QList<QDate> *>(value);
+                *val = output;
+            }
+            else if(QStringLiteral("QDateTime").compare(complexType) == 0) {
+                QList<QDateTime> output;
+                foreach (const QJsonValue & jval, arr) {
+                    output.append(QDateTime::fromString(jval.toString(), Qt::ISODate));
+                }
+                QList<QDateTime> *val = static_cast<QList<QDateTime> *>(value);
+                *val = output;
+            }
+            else
+            {
+                qWarning() << "Unable to set value from " << complexType;
+            }
+        }
+    }
+}
+
+void
+toJsonValue(const QString& name, void* value, QJsonObject* output, const QString& type) {
+    if(value == nullptr) {
+        return;
+    }
+    if(type.startsWith("{{prefix}}")) {
+        {{prefix}}Object *swgObject = reinterpret_cast<{{prefix}}Object *>(value);
+        if(swgObject != nullptr) {
+            QJsonObject o = swgObject->asJsonObject();
+            if(!name.isEmpty()) {
+                output->insert(name, o);
+            }
+            else {
+                output->empty();
+                foreach(QString key, o.keys()) {
+                    output->insert(key, o.value(key));
+                }
+            }
+        }
+    }
+    else if(QStringLiteral("QString").compare(type) == 0) {
+        QString* str = static_cast<QString*>(value);
+        output->insert(name, QJsonValue(*str));
+    }
+    else if(QStringLiteral("qint32").compare(type) == 0) {
+        qint32* str = static_cast<qint32*>(value);
+        output->insert(name, QJsonValue(*str));
+    }
+    else if(QStringLiteral("qint64").compare(type) == 0) {
+        qint64* str = static_cast<qint64*>(value);
+        output->insert(name, QJsonValue(*str));
+    }
+    else if(QStringLiteral("bool").compare(type) == 0) {
+        bool* str = static_cast<bool*>(value);
+        output->insert(name, QJsonValue(*str));
+    }
+    else if(QStringLiteral("float").compare(type) == 0) {
+        float* str = static_cast<float*>(value);
+        output->insert(name, QJsonValue((double)*str));
+    }
+    else if(QStringLiteral("double").compare(type) == 0) {
+        double* str = static_cast<double*>(value);
+        output->insert(name, QJsonValue(*str));
+    }
+    else if(QStringLiteral("QDate").compare(type) == 0) {
+        QDate* date = static_cast<QDate*>(value);
+        output->insert(name, QJsonValue(date->toString(Qt::ISODate)));
+    }
+    else if(QStringLiteral("QDateTime").compare(type) == 0) {
+        QDateTime* datetime = static_cast<QDateTime*>(value);
+        output->insert(name, QJsonValue(datetime->toString(Qt::ISODate)));
+    }
+    else if(QStringLiteral("QByteArray").compare(type) == 0) {
+        QByteArray* byteArray = static_cast<QByteArray*>(value);
+        output->insert(name, QJsonValue(QString(byteArray->toBase64())));
+    }
+}
+
+void
+toJsonArray(QList<void*>* value, QJsonArray* output, const QString& innerType) {
+    foreach(void* obj, *value) {
+        QJsonObject element;
+
+        toJsonValue(nullptr, obj, &element, innerType);
+        output->append(element);
+    }
+}
+
+QString
+stringValue(const QString& value) {
+    return value;
+}
+
+QString
+stringValue(qint32 value) {
+    return QString::number(value);
+}
+
+QString
+stringValue(qint64 value) {
+    return QString::number(value);
+}
+
+QString
+stringValue(bool value) {
+    return QString(value ? "true" : "false");
+}
+} /* namespace Swagger */

@@ -1,0 +1,172 @@
+{{>licenseInfo}}
+#include "{{classname}}.h"
+#include "{{prefix}}Helpers.h"
+#include "{{prefix}}ModelFactory.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+
+namespace Swagger {
+{{classname}}::{{classname}}() {}
+
+{{classname}}::~{{classname}}() {}
+
+{{classname}}::{{classname}}(QString host, QString basePath) {
+    this->host = host;
+    this->basePath = basePath;
+}
+
+#define MUSTACHE_PARAM(T) QString("{%1}").arg(#T)
+
+{{#operations}}
+{{#operation}}
+void
+{{classname}}::{{nickname}}({{#allParams}}{{{vendorExtensions.paramType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) {
+    QString fullPath;
+    fullPath.append(this->host).append(this->basePath).append("{{path}}");
+
+    {{#pathParams}}
+    fullPath.replace(MUSTACHE_PARAM({{baseName}}), stringValue({{paramName}}));
+    {{/pathParams}}
+
+    {{#queryParams}}
+    {{^collectionFormat}}
+    if (fullPath.indexOf("?") > 0)
+      fullPath.append("&");
+    else
+      fullPath.append("?");
+    fullPath.append(QUrl::toPercentEncoding("{{baseName}}"))
+        .append("=")
+        .append(QUrl::toPercentEncoding(stringValue({{paramName}})));
+    {{/collectionFormat}}
+
+    {{#collectionFormat}}
+
+    if ({{{paramName}}}->size() > 0) {
+      if (QString("{{collectionFormat}}").indexOf("multi") == 0) {
+        foreach({{{baseType}}} t, *{{paramName}}) {
+          if (fullPath.indexOf("?") > 0)
+            fullPath.append("&");
+          else
+            fullPath.append("?");
+          fullPath.append("{{{baseName}}}=").append(stringValue(t));
+        }
+      }
+      else if (QString("{{collectionFormat}}").indexOf("ssv") == 0) {
+        if (fullPath.indexOf("?") > 0)
+          fullPath.append("&");
+        else
+          fullPath.append("?");
+        fullPath.append("{{baseName}}=");
+        qint32 count = 0;
+        foreach({{{baseType}}} t, *{{paramName}}) {
+          if (count > 0) {
+            fullPath.append(" ");
+          }
+          fullPath.append(stringValue(t));
+        }
+      }
+      else if (QString("{{collectionFormat}}").indexOf("tsv") == 0) {
+        if (fullPath.indexOf("?") > 0)
+          fullPath.append("&");
+        else
+          fullPath.append("?");
+        fullPath.append("{{baseName}}=");
+        qint32 count = 0;
+        foreach({{{baseType}}} t, *{{paramName}}) {
+          if (count > 0) {
+            fullPath.append("\t");
+          }
+          fullPath.append(stringValue(t));
+        }
+      }
+    }
+
+    {{/collectionFormat}}
+    {{/queryParams}}
+
+    {{prefix}}HttpRequestWorker *worker = new {{prefix}}HttpRequestWorker();
+    {{prefix}}HttpRequestInput input(fullPath, "{{httpMethod}}");
+
+    {{#formParams}}if ({{paramName}} != nullptr) {
+        {{^isFile}}input.add_var("{{baseName}}", *{{paramName}});{{/isFile}}{{#isFile}}input.add_file("{{baseName}}", (*{{paramName}}).local_filename, (*{{paramName}}).request_filename, (*{{paramName}}).mime_type);{{/isFile}}
+    }
+    {{/formParams}}
+
+    {{#bodyParams}}
+    {{#isContainer}}
+    QJsonArray* {{paramName}}Array = new QJsonArray();
+    toJsonArray((QList<void*>*){{paramName}}, {{paramName}}Array, QString("body"), QString("{{prefix}}User*"));
+
+    QJsonDocument doc(*{{paramName}}Array);
+    QByteArray bytes = doc.toJson();
+
+    input.request_body.append(bytes);
+    {{/isContainer}}
+    {{^isContainer}}
+    QString output = {{paramName}}->asJson();
+    input.request_body.append(output);
+    {{/isContainer}}{{/bodyParams}}
+
+    {{#headerParams}}
+    // TODO: add header support
+    {{/headerParams}}
+
+    connect(worker,
+            &{{prefix}}HttpRequestWorker::on_execution_finished,
+            this,
+            &{{classname}}::{{nickname}}Callback);
+
+    worker->execute(&input);
+}
+
+void
+{{classname}}::{{nickname}}Callback({{prefix}}HttpRequestWorker * worker) {
+    QString msg;
+
+    if (worker->error_type == QNetworkReply::NoError) {
+        msg = QString("Success! %1 bytes").arg(worker->response.length());
+    }
+    else {
+        msg = "Error: " + worker->error_str;
+        {{#returnType}}emit {{nickname}}Signal(0, false, msg);{{/returnType}}
+        {{^returnType}}emit {{nickname}}Signal(false, msg);{{/returnType}}
+        worker->deleteLater();
+
+        return;
+    }
+
+    {{#returnType}}
+    {{#isListContainer}}
+    {{{returnType}}} output;
+    QJsonDocument doc = QJsonDocument::fromJson(worker->response);
+    QJsonArray jsonArray = doc.array();
+
+    foreach(QJsonValue obj, jsonArray) {
+        {{#vendorExtensions.isInnerObject}}
+        {{{returnBaseType}}} *o = new {{{returnBaseType}}};
+        o->fromJsonObject(obj.toObject());
+        output.append(o);
+        {{/vendorExtensions.isInnerObject}}{{^vendorExtensions.isInnerObject}}        {{#vendorExtensions.isDateTime}}output.append(obj.toVariant().toDateTime());{{/vendorExtensions.isDateTime}}{{#vendorExtensions.isDate}}output.append(obj.toVariant().toDate());{{/vendorExtensions.isDate}}{{#vendorExtensions.isBool}}output.append(obj.toBool());{{/vendorExtensions.isBool}}{{#vendorExtensions.isString}}output.append(obj.toString());{{/vendorExtensions.isString}}{{#vendorExtensions.isDouble}}output.append(obj.toDouble());{{/vendorExtensions.isDouble}}{{#vendorExtensions.isInteger}}output.append(obj.toInt());{{/vendorExtensions.isInteger}}{{#vendorExtensions.isLong}}output.append(obj.toInt());{{/vendorExtensions.isLong}}{{#vendorExtensions.isFloat}}output.append(obj.toDouble());{{/vendorExtensions.isFloat}}{{/vendorExtensions.isInnerObject}}
+    }
+    {{/isListContainer}}
+    {{^isListContainer}}
+    {{#returnTypeIsPrimitive}}
+    {{{returnType}}} output;  // TODO add primitive output support
+    {{/returnTypeIsPrimitive}}
+    {{^returnTypeIsPrimitive}}
+    QString json(worker->response);
+    {{{returnType}}} output = static_cast<{{{returnType}}}>({{prefix}}ObjectFactory::Get().Create{{prefix}}Object(this, QString("Swagger::{{{returnBaseType}}}")));
+    output->fromJson(json);
+    {{/returnTypeIsPrimitive}}
+    {{/isListContainer}}
+    {{/returnType}}
+
+    worker->deleteLater();
+
+    {{#returnType}}emit {{nickname}}Signal(output, true, msg);{{/returnType}}
+    {{^returnType}}emit {{nickname}}Signal(true, msg);{{/returnType}}
+}
+{{/operation}}
+{{/operations}}
+} /* namespace Swagger */

@@ -1,0 +1,52 @@
+{{>licenseInfo}}
+
+#include "{{prefix}}Helpers.h"
+#include "{{prefix}}ModelFactory.h"
+
+{{#models}}{{#model}}#include <{{classname}}.h>
+{{/model}}{{/models}}
+
+#include <QString>
+#include <QList>
+#include <QCoreApplication>
+#include <QDebug>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QDebug>
+
+#include <cassert>
+
+using namespace Swagger;
+
+{{#models}}{{#model}}{{classname}} *create{{classname}}(QObject *parent)
+{
+    {{classname}} *o = static_cast<{{classname}}*>({{prefix}}ObjectFactory::Get().CreateSwgObject(parent, QString("{{classname}}")));
+    assert(o != nullptr);
+    {{#vars}}
+    {{#isString}}o->{{setter}}("{{name}}");{{/isString}}
+    {{/vars}}
+    return o;
+}
+{{/model}}{{/models}}
+
+int main(int argc, char** argv)
+{
+    QCoreApplication app(argc, argv);
+
+    qDebug() << "TESTING EFFICACITY API FACTORY";
+
+    QObject root;
+    {
+        QObject parent(&root);
+        int i=0;
+        {{#models}}
+        {{#model}}create{{classname}}(&parent);{{/model}} ++ i;
+        {{/models}}
+        QList<{{prefix}}Object *> all{{prefix}}Objects = parent.findChildren<{{prefix}}Object *>();
+        assert(all{{prefix}}Objects.size() == i); // do we have a #models.number ?
+    }
+    QList<{{prefix}}Object *> all{{prefix}}Objects = root.findChildren<{{prefix}}Object *>();
+    assert(all{{prefix}}Objects.size() == 0);
+    
+    return app.exec();
+}
