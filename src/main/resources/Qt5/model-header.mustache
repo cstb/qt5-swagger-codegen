@@ -5,8 +5,8 @@
  * {{description}}
  */
 
-#ifndef _Swagger_{{classname}}_H_
-#define _Swagger_{{classname}}_H_
+#ifndef _{{namespace}}_{{classname}}_H_
+#define _{{namespace}}_{{classname}}_H_
 
 #include "{{prefix}}Object.h"{{/model}}{{/models}}
 {{#imports}}{{{import}}}
@@ -14,9 +14,9 @@
 
 
 {{#models}}{{#model}}
-namespace Swagger {
+namespace {{namespace}} {
 
-class {{classname}}: public {{#parent}}{{parent}}{{/parent}}{{^parent}}{{prefix}}Object{{/parent}} {
+class {{classname}}: public {{prefix}}Object {
 
     {{#vars}}
     {{{datatype}}} {{name}};
@@ -29,13 +29,13 @@ class {{classname}}: public {{#parent}}{{parent}}{{/parent}}{{^parent}}{{prefix}
     {{/vars}}
 
 public:
-    {{classname}}(QObject *parent=0);
-    virtual ~{{classname}}();
+    {{classname}}(QObject *parent=nullptr);
+    virtual ~{{classname}}() override;
 
-    QString asJson ();
-    QJsonObject asJsonObject();
-    void fromJsonObject(const QJsonObject &json);
-    void fromJson(const QString &jsonString);
+    virtual QString asJson () override;
+    virtual QJsonObject asJsonObject() override;
+    virtual void fromJsonObject(const QJsonObject &json) override;
+    virtual void fromJson(const QString &jsonString) override;
 
     {{#vars}}
     {{{vendorExtensions.paramType}}} {{getter}}() const;
@@ -44,8 +44,8 @@ public:
     {{/vars}}
 };
 
-} /* namespace Swagger */
+} /* namespace {{namespace}} */
 
-#endif /* {{classname}}_H_ */
+#endif /* _{{namespace}}_{{classname}}_H_ */
 {{/model}}
 {{/models}}

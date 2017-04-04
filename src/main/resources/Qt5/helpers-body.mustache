@@ -8,10 +8,10 @@
 #include <QDateTime>
 #include <QtDebug>
 
-namespace Swagger {
+namespace {{namespace}} {
 
 void
-setValue(void* value, QJsonValue obj, const QString& type, const QString& complexType, QObject *parent) {
+setValue(void* value, const QString &valueName, QJsonValue obj, const QString& type, const QString& complexType, QObject *parent) {
     if(value == nullptr) {
         // can't set value with a null pointer
         return;
@@ -55,8 +55,20 @@ setValue(void* value, QJsonValue obj, const QString& type, const QString& comple
     else if(type.startsWith("{{prefix}}") && obj.isObject()) {
         // complex type
         QJsonObject jsonObj = obj.toObject();
-        {{prefix}}Object * so = Swagger::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "Swagger::" + type);
+        {{prefix}}Object * so = {{namespace}}::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "{{namespace}}::" + type);
         if(so != nullptr) {
+            so->fromJsonObject(jsonObj);
+            {{prefix}}Object **val = static_cast<{{prefix}}Object**>(value);
+            *val = so;
+        }
+    }
+    else if(type.startsWith("{{prefix}}") && obj.isArray()) {
+        // complex type
+        QJsonArray arr = obj.toArray();
+        {{prefix}}Object * so = {{namespace}}::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "{{namespace}}::" + type);
+        if(so != nullptr) {
+            QJsonObject jsonObj;
+            jsonObj.insert(valueName, arr);
             so->fromJsonObject(jsonObj);
             {{prefix}}Object **val = static_cast<{{prefix}}Object**>(value);
             *val = so;
@@ -69,7 +81,7 @@ setValue(void* value, QJsonValue obj, const QString& type, const QString& comple
             QList<{{prefix}}Object *> output;
             foreach (const QJsonValue & jval, arr) {
                 // it's an object
-                {{prefix}}Object * val = Swagger::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "Swagger::" + complexType);
+                {{prefix}}Object * val = {{namespace}}::{{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, "{{namespace}}::" + complexType);
                 val->fromJsonObject(jval.toObject());
                 output.append(val);
             }
@@ -237,4 +249,4 @@ QString
 stringValue(bool value) {
     return QString(value ? "true" : "false");
 }
-} /* namespace Swagger */
+} /* namespace {{namespace}} */

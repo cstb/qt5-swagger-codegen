@@ -2,28 +2,35 @@
 #include "{{classname}}.h"
 #include "{{prefix}}Helpers.h"
 #include "{{prefix}}ModelFactory.h"
+#include "{{prefix}}HttpRequest.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
 
-namespace Swagger {
-{{classname}}::{{classname}}() {}
+namespace {{namespace}} {
+{{classname}}::{{classname}}(QObject *parent) : QObject(parent) {}
 
-{{classname}}::~{{classname}}() {}
+{{classname}}::~{{classname}}() = default;
 
-{{classname}}::{{classname}}(QString host, QString basePath) {
-    this->host = host;
-    this->basePath = basePath;
+{{classname}}::{{classname}}(const QString &host, const QString &basePath, QObject *parent) 
+: QObject(parent),
+  _host(host),
+  _basePath(basePath) 
+{
 }
 
 #define MUSTACHE_PARAM(T) QString("{%1}").arg(#T)
+#define TO_HEADER_NAME(x) QString("h_%1").arg(QString(x).mid(1))
+
+const QList<QNetworkReply::RawHeaderPair> &    {{classname}}::lastRawHeaderPairs() const
+{
+    return _lastRawHeaderPairs;
+}
 
 {{#operations}}
-{{#operation}}
-void
-{{classname}}::{{nickname}}({{#allParams}}{{{vendorExtensions.paramType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) {
+{{#operation}}{{#vendorExtensions.isFile}}QNetworkRequest {{/vendorExtensions.isFile}}{{^vendorExtensions.isFile}}void {{/vendorExtensions.isFile}}{{classname}}::{{nickname}}({{#allParams}}{{{vendorExtensions.paramType}}} {{paramName}}{{#hasMore}}, {{/hasMore}}{{/allParams}}) {
     QString fullPath;
-    fullPath.append(this->host).append(this->basePath).append("{{path}}");
+    fullPath.append(this->_host).append(this->_basePath).append("{{path}}");
 
     {{#pathParams}}
     fullPath.replace(MUSTACHE_PARAM({{baseName}}), stringValue({{paramName}}));
@@ -31,53 +38,31 @@ void
 
     {{#queryParams}}
     {{^collectionFormat}}
-    if (fullPath.indexOf("?") > 0)
-      fullPath.append("&");
-    else
-      fullPath.append("?");
-    fullPath.append(QUrl::toPercentEncoding("{{baseName}}"))
-        .append("=")
-        .append(QUrl::toPercentEncoding(stringValue({{paramName}})));
+    if(!stringValue({{paramName}}).isEmpty())
+    {
+        if (fullPath.indexOf("?") > 0)
+          fullPath.append("&");
+        else
+          fullPath.append("?");
+        fullPath.append(QUrl::toPercentEncoding("{{baseName}}"))
+            .append("=")
+            .append(QUrl::toPercentEncoding(stringValue({{paramName}})));
+    }
     {{/collectionFormat}}
 
     {{#collectionFormat}}
 
-    if ({{{paramName}}}->size() > 0) {
-      if (QString("{{collectionFormat}}").indexOf("multi") == 0) {
-        foreach({{{baseType}}} t, *{{paramName}}) {
-          if (fullPath.indexOf("?") > 0)
-            fullPath.append("&");
-          else
-            fullPath.append("?");
-          fullPath.append("{{{baseName}}}=").append(stringValue(t));
-        }
-      }
-      else if (QString("{{collectionFormat}}").indexOf("ssv") == 0) {
+    if ({{{paramName}}}.size() > 0) {
+      if (QString("{{collectionFormat}}").indexOf("csv") == 0) {
         if (fullPath.indexOf("?") > 0)
           fullPath.append("&");
         else
           fullPath.append("?");
-        fullPath.append("{{baseName}}=");
-        qint32 count = 0;
-        foreach({{{baseType}}} t, *{{paramName}}) {
-          if (count > 0) {
-            fullPath.append(" ");
-          }
-          fullPath.append(stringValue(t));
-        }
-      }
-      else if (QString("{{collectionFormat}}").indexOf("tsv") == 0) {
-        if (fullPath.indexOf("?") > 0)
-          fullPath.append("&");
-        else
-          fullPath.append("?");
-        fullPath.append("{{baseName}}=");
-        qint32 count = 0;
-        foreach({{{baseType}}} t, *{{paramName}}) {
-          if (count > 0) {
-            fullPath.append("\t");
-          }
-          fullPath.append(stringValue(t));
+        fullPath.append("{{{baseName}}}=");
+        fullPath.append(stringValue({{paramName}}.at(0)));
+        for(int i=1; i < {{paramName}}.size(); ++i) {
+            fullPath.append(',');
+            fullPath.append(stringValue({{paramName}}.at(i)));
         }
       }
     }
@@ -85,41 +70,93 @@ void
     {{/collectionFormat}}
     {{/queryParams}}
 
-    {{prefix}}HttpRequestWorker *worker = new {{prefix}}HttpRequestWorker();
-    {{prefix}}HttpRequestInput input(fullPath, "{{httpMethod}}");
+    {{#vendorExtensions.isFile}}QNetworkRequest request;{{/vendorExtensions.isFile}}
+    {{^vendorExtensions.isFile}}{{prefix}}HttpRequestWorker *worker = new {{prefix}}HttpRequestWorker();
+    {{prefix}}HttpRequestInput input(fullPath, "{{httpMethod}}");{{/vendorExtensions.isFile}}
 
-    {{#formParams}}if ({{paramName}} != nullptr) {
-        {{^isFile}}input.add_var("{{baseName}}", *{{paramName}});{{/isFile}}{{#isFile}}input.add_file("{{baseName}}", (*{{paramName}}).local_filename, (*{{paramName}}).request_filename, (*{{paramName}}).mime_type);{{/isFile}}
+    {{#formParams}}
+    {{^vendorExtensions.isObject}}
+    {{#isString}}input.add_var("{{baseName}}", {{paramName}});{{/isString}}
+    {{#isInteger}}input.add_var("{{baseName}}", QString::number({{paramName}}));{{/isInteger}}
+    {{#isFloat}}input.add_var("{{baseName}}", QString::number({{paramName}}));{{/isFloat}}
+    {{#isDouble}}input.add_var("{{baseName}}", QString::number({{paramName}}));{{/isDouble}}
+    {{#isLong}}input.add_var("{{baseName}}", QString::number({{paramName}}));{{/isLong}}
+    {{#isByteArray}}input.add_var("{{baseName}}", QString({{paramName}}));{{/isByteArray}}
+    {{/vendorExtensions.isObject}}
+    {{#vendorExtensions.isObject}}
+    if ({{paramName}} != nullptr) {
+        {{^isFile}}input.add_var("{{baseName}}", *{{paramName}});{{/isFile}}{{#isFile}}input.add_file((**{{paramName}}).variable_name, (**{{paramName}}).local_filename, (**{{paramName}}).request_filename, (**{{paramName}}).mime_type);{{/isFile}}
     }
+    {{/vendorExtensions.isObject}}
     {{/formParams}}
 
     {{#bodyParams}}
     {{#isContainer}}
-    QJsonArray* {{paramName}}Array = new QJsonArray();
-    toJsonArray((QList<void*>*){{paramName}}, {{paramName}}Array, QString("body"), QString("{{prefix}}User*"));
-
-    QJsonDocument doc(*{{paramName}}Array);
-    QByteArray bytes = doc.toJson();
-
+    QJsonArray {{paramName}}Array;
+    {{#vendorExtensions.isInnerObject}}
+    foreach(auto id, {{paramName}})
+    {
+        QJsonObject obj = id->asJsonObject();
+        {{paramName}}Array.append(obj);
+    }
+    {{/vendorExtensions.isInnerObject}}
+    {{^vendorExtensions.isInnerObject}}
+    foreach(auto id, {{paramName}})
+        {{paramName}}Array.append(id);
+    {{/vendorExtensions.isInnerObject}}
+    QJsonDocument doc({{paramName}}Array);
+    QByteArray bytes = doc.toJson(QJsonDocument::Compact);
     input.request_body.append(bytes);
     {{/isContainer}}
     {{^isContainer}}
-    QString output = {{paramName}}->asJson();
-    input.request_body.append(output);
+    
+    {{#isObject}}QString output = {{paramName}}->asJson(); input.request_body.append(output);{{/isObject}}
+    {{^isObject}}
+        {{#isString}}QString output = {{paramName}}.asJson(); input.request_body.append(output);{{/isString}}
+        {{#isInteger}}QString output = QString::number({{paramName}}); input.request_body.append(output);{{/isInteger}}
+        {{#isFloat}}QString output = QString::number({{paramName}}); input.request_body.append(output);{{/isFloat}}
+        {{#isDouble}}QString output = QString::number({{paramName}}); input.request_body.append(output);{{/isDouble}}
+        {{#isLong}}QString output = QString::number({{paramName}}); input.request_body.append(output);{{/isLong}}
+        {{#vendorExtensions.isObject}}
+           QString output = {{paramName}}->asJson(); input.request_body.append(output);
+        {{/vendorExtensions.isObject}}
+    {{/isObject}}
     {{/isContainer}}{{/bodyParams}}
 
+    {{#vendorExtensions.isFile}}
     {{#headerParams}}
-    // TODO: add header support
+    {{#isString}}request.setRawHeader(TO_HEADER_NAME("{{paramName}}").toLatin1(), {{paramName}}.toLatin1());{{/isString}}
+    {{#isInteger}}request.setRawHeader(TO_HEADER_NAME("{{paramName}}").toLatin1(), QByteArray::number({{paramName}}));{{/isInteger}}
+    {{#isFloat}}request.setRawHeader(TO_HEADER_NAME("{{paramName}}").toLatin1(), QByteArray::number({{paramName}}));{{/isFloat}}
+    {{#isDouble}}request.setRawHeader(TO_HEADER_NAME("{{paramName}}").toLatin1(), QByteArray::number({{paramName}}));{{/isDouble}}
+    {{#isLong}}request.setRawHeader(TO_HEADER_NAME("{{paramName}}").toLatin1(), QByteArray::number({{paramName}}));{{/isLong}}
     {{/headerParams}}
+    {{/vendorExtensions.isFile}}
+    {{^vendorExtensions.isFile}}
+    {{#headerParams}}
+    {{#isString}}input.headers.insert(TO_HEADER_NAME("{{paramName}}"), {{paramName}});{{/isString}}
+    {{#isInteger}}input.headers.insert(TO_HEADER_NAME("{{paramName}}"), QString::number({{paramName}}));{{/isInteger}}
+    {{#isFloat}}input.headers.insert(TO_HEADER_NAME("{{paramName}}"), QString::number({{paramName}}));{{/isFloat}}
+    {{#isDouble}}input.headers.insert(TO_HEADER_NAME("{{paramName}}"), QString::number({{paramName}}));{{/isDouble}}
+    {{#isLong}}input.headers.insert(TO_HEADER_NAME("{{paramName}}"), QString::number({{paramName}}));{{/isLong}}
+    {{/headerParams}}
+    {{/vendorExtensions.isFile}}
 
+    {{#vendorExtensions.isFile}}
+    request.setUrl(fullPath);
+    return request;
+    {{/vendorExtensions.isFile}}
+    {{^vendorExtensions.isFile}}
     connect(worker,
             &{{prefix}}HttpRequestWorker::on_execution_finished,
             this,
             &{{classname}}::{{nickname}}Callback);
 
     worker->execute(&input);
+    {{/vendorExtensions.isFile}}
 }
 
+{{^vendorExtensions.isFile}}
 void
 {{classname}}::{{nickname}}Callback({{prefix}}HttpRequestWorker * worker) {
     QString msg;
@@ -129,7 +166,10 @@ void
     }
     else {
         msg = "Error: " + worker->error_str;
-        {{#returnType}}emit {{nickname}}Signal(0, false, msg);{{/returnType}}
+        {{#returnType}}
+        {{#isListContainer}}emit {{nickname}}Signal({{{returnType}}}(), false, msg);{{/isListContainer}}
+        {{^isListContainer}}emit {{nickname}}Signal(nullptr, false, msg);{{/isListContainer}}
+        {{/returnType}}
         {{^returnType}}emit {{nickname}}Signal(false, msg);{{/returnType}}
         worker->deleteLater();
 
@@ -144,10 +184,11 @@ void
 
     foreach(QJsonValue obj, jsonArray) {
         {{#vendorExtensions.isInnerObject}}
-        {{{returnBaseType}}} *o = new {{{returnBaseType}}};
+        {{{returnBaseType}}} *o = static_cast<{{{returnBaseType}}} *>({{prefix}}ObjectFactory::Get().Create{{prefix}}Object(this, QString("{{namespace}}::{{{returnBaseType}}}")));
         o->fromJsonObject(obj.toObject());
         output.append(o);
-        {{/vendorExtensions.isInnerObject}}{{^vendorExtensions.isInnerObject}}        {{#vendorExtensions.isDateTime}}output.append(obj.toVariant().toDateTime());{{/vendorExtensions.isDateTime}}{{#vendorExtensions.isDate}}output.append(obj.toVariant().toDate());{{/vendorExtensions.isDate}}{{#vendorExtensions.isBool}}output.append(obj.toBool());{{/vendorExtensions.isBool}}{{#vendorExtensions.isString}}output.append(obj.toString());{{/vendorExtensions.isString}}{{#vendorExtensions.isDouble}}output.append(obj.toDouble());{{/vendorExtensions.isDouble}}{{#vendorExtensions.isInteger}}output.append(obj.toInt());{{/vendorExtensions.isInteger}}{{#vendorExtensions.isLong}}output.append(obj.toInt());{{/vendorExtensions.isLong}}{{#vendorExtensions.isFloat}}output.append(obj.toDouble());{{/vendorExtensions.isFloat}}{{/vendorExtensions.isInnerObject}}
+        {{/vendorExtensions.isInnerObject}}
+        {{^vendorExtensions.isInnerObject}}{{#vendorExtensions.isDateTime}}output.append(obj.toVariant().toDateTime());{{/vendorExtensions.isDateTime}}{{#vendorExtensions.isDate}}output.append(obj.toVariant().toDate());{{/vendorExtensions.isDate}}{{#vendorExtensions.isBool}}output.append(obj.toBool());{{/vendorExtensions.isBool}}{{#vendorExtensions.isString}}output.append(obj.toString());{{/vendorExtensions.isString}}{{#vendorExtensions.isDouble}}output.append(obj.toDouble());{{/vendorExtensions.isDouble}}{{#vendorExtensions.isInteger}}output.append(obj.toInt());{{/vendorExtensions.isInteger}}{{#vendorExtensions.isLong}}output.append(obj.toInt());{{/vendorExtensions.isLong}}{{#vendorExtensions.isFloat}}output.append(obj.toDouble());{{/vendorExtensions.isFloat}}{{/vendorExtensions.isInnerObject}}
     }
     {{/isListContainer}}
     {{^isListContainer}}
@@ -155,18 +196,23 @@ void
     {{{returnType}}} output;  // TODO add primitive output support
     {{/returnTypeIsPrimitive}}
     {{^returnTypeIsPrimitive}}
+
     QString json(worker->response);
-    {{{returnType}}} output = static_cast<{{{returnType}}}>({{prefix}}ObjectFactory::Get().Create{{prefix}}Object(this, QString("Swagger::{{{returnBaseType}}}")));
+    {{{returnType}}} output = static_cast<{{{returnType}}}>({{prefix}}ObjectFactory::Get().Create{{prefix}}Object(this, QString("{{namespace}}::{{{returnBaseType}}}")));
     output->fromJson(json);
     {{/returnTypeIsPrimitive}}
     {{/isListContainer}}
     {{/returnType}}
 
+    _lastRawHeaderPairs = worker->rawHeaderPairs;
     worker->deleteLater();
 
     {{#returnType}}emit {{nickname}}Signal(output, true, msg);{{/returnType}}
     {{^returnType}}emit {{nickname}}Signal(true, msg);{{/returnType}}
 }
+{{/vendorExtensions.isFile}}
+
 {{/operation}}
+
 {{/operations}}
-} /* namespace Swagger */
+} /* namespace {{namespace}} */

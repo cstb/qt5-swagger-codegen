@@ -2,7 +2,7 @@
 
 #include "{{prefix}}ModelFactory.h"
 
-using namespace Swagger;
+using namespace {{namespace}};
 
 {{prefix}}ObjectFactory & {{prefix}}ObjectFactory::Get()
 {
@@ -46,4 +46,4 @@ bool {{prefix}}ObjectFactory::isRegistered(const QString &id) const
 }
 
 {{prefix}}ObjectFactory::{{prefix}}ObjectFactory() {}
-{{prefix}}ObjectFactory::~{{prefix}}ObjectFactory() {}
+{{prefix}}ObjectFactory::~{{prefix}}ObjectFactory() = default;

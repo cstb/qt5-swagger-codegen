@@ -14,6 +14,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
+namespace {{namespace}} {
+    
+
 enum {{prefix}}HttpRequestVarLayout {NOT_SET, ADDRESS, URL_ENCODED, MULTIPART};
 
 
@@ -52,12 +55,13 @@ class {{prefix}}HttpRequestWorker : public QObject {
     Q_OBJECT
 
 public:
+    QList<QNetworkReply::RawHeaderPair> rawHeaderPairs;
     QByteArray response;
     QNetworkReply::NetworkError error_type;
     QString error_str;
 
-    explicit {{prefix}}HttpRequestWorker(QObject *parent = 0);
-    virtual ~{{prefix}}HttpRequestWorker();
+    explicit {{prefix}}HttpRequestWorker(QObject *parent = nullptr);
+    virtual ~{{prefix}}HttpRequestWorker() override;
 
     QString http_attribute_encode(QString attribute_name, QString input);
     void execute({{prefix}}HttpRequestInput *input);
@@ -69,8 +73,16 @@ private:
     QNetworkAccessManager *manager;
 
 private slots:
-    void on_manager_finished(QNetworkReply *reply);
+    void on_manager_finished(QNetworkReply *);
+    void on_manager_authenticationRequired(QNetworkReply *, QAuthenticator *);
+    void on_manager_encrypted(QNetworkReply *);
+    void on_manager_networkAccessibleChanged(QNetworkAccessManager::NetworkAccessibility );
+    void on_manager_preSharedKeyAuthenticationRequired(QNetworkReply *, QSslPreSharedKeyAuthenticator *);
+    void on_manager_proxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *);
+    void on_manager_sslErrors(QNetworkReply *, const QList<QSslError> &);
 
 };
+
+} /* namespace {{namespace}} */
 
 #endif // HTTPREQUESTWORKER_H

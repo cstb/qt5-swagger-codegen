@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QBuffer>
 
+using namespace {{namespace}};
 
 {{prefix}}HttpRequestInput::{{prefix}}HttpRequestInput() {
     initialize();
@@ -43,19 +44,22 @@ void {{prefix}}HttpRequestInput::add_file(QString variable_name, QString local_f
 
     manager = new QNetworkAccessManager(this);
     connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(on_manager_finished(QNetworkReply*)));
+    connect(manager, SIGNAL(authenticationRequired(QNetworkReply *, QAuthenticator *)), this, SLOT(on_manager_authenticationRequired(QNetworkReply *, QAuthenticator *)));
+    connect(manager, SIGNAL(encrypted(QNetworkReply *)), this, SLOT(on_manager_encrypted(QNetworkReply *)));
+    connect(manager, SIGNAL(networkAccessibleChanged(QNetworkAccessManager::NetworkAccessibility)), this, SLOT(on_manager_networkAccessibleChanged(QNetworkAccessManager::NetworkAccessibility)));
+    connect(manager, SIGNAL(preSharedKeyAuthenticationRequired(QNetworkReply *, QSslPreSharedKeyAuthenticator *)), this, SLOT(on_manager_preSharedKeyAuthenticationRequired(QNetworkReply *, QSslPreSharedKeyAuthenticator *)));
+    connect(manager, SIGNAL(proxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *)), this, SLOT(on_manager_proxyAuthenticationRequired(const QNetworkProxy &, QAuthenticator *)));
+    connect(manager, SIGNAL(sslErrors(QNetworkReply *, const QList<QSslError> &)), this, SLOT(on_manager_sslErrors(QNetworkReply *, const QList<QSslError> &)));
 }
 
-{{prefix}}HttpRequestWorker::~{{prefix}}HttpRequestWorker() {
-}
+{{prefix}}HttpRequestWorker::~{{prefix}}HttpRequestWorker() = default;
 
 QString {{prefix}}HttpRequestWorker::http_attribute_encode(QString attribute_name, QString input) {
     // result structure follows RFC 5987
     bool need_utf_encoding = false;
     QString result = "";
     QByteArray input_c = input.toLocal8Bit();
-    char c;
-    for (int i = 0; i < input_c.length(); i++) {
-        c = input_c.at(i);
+    for (char c : input_c) {
         if (c == '\\' || c == '/' || c == '\0' || c < ' ' || c > '~') {
             // ignore and request utf-8 version
             need_utf_encoding = true;
@@ -78,8 +82,7 @@ QString {{prefix}}HttpRequestWorker::http_attribute_encode(QString attribute_nam
     }
 
     QString result_utf8 = "";
-    for (int i = 0; i < input_c.length(); i++) {
-        c = input_c.at(i);
+    for (char c : input_c) {
         if (
             (c >= '0' && c <= '9')
             || (c >= 'A' && c <= 'Z')
@@ -88,7 +91,7 @@ QString {{prefix}}HttpRequestWorker::http_attribute_encode(QString attribute_nam
             result_utf8 += c;
         }
         else {
-            result_utf8 += "%" + QString::number(static_cast<unsigned char>(input_c.at(i)), 16).toUpper();
+            result_utf8 += "%" + QString::number(static_cast<unsigned char>(c), 16).toUpper();
         }
     }
 
@@ -97,7 +100,6 @@ QString {{prefix}}HttpRequestWorker::http_attribute_encode(QString attribute_nam
 }
 
 void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
-
     // reset variables
 
     QByteArray request_content = "";
@@ -176,30 +178,30 @@ void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
         }
 
         // add files
-        for (QList<{{prefix}}HttpRequestInputFileElement>::iterator file_info = input->files.begin(); file_info != input->files.end(); file_info++) {
-            QFileInfo fi(file_info->local_filename);
+        for (auto & file_info : input->files) {
+            QFileInfo fi(file_info.local_filename);
 
             // ensure necessary variables are available
             if (
-                file_info->local_filename == nullptr || file_info->local_filename.isEmpty()
-                || file_info->variable_name == nullptr || file_info->variable_name.isEmpty()
+                file_info.local_filename == nullptr || file_info.local_filename.isEmpty()
+                || file_info.variable_name == nullptr || file_info.variable_name.isEmpty()
                 || !fi.exists() || !fi.isFile() || !fi.isReadable()
             ) {
                 // silent abort for the current file
                 continue;
             }
 
-            QFile file(file_info->local_filename);
+            QFile file(file_info.local_filename);
             if (!file.open(QIODevice::ReadOnly)) {
                 // silent abort for the current file
                 continue;
             }
 
             // ensure filename for the request
-            if (file_info->request_filename == nullptr || file_info->request_filename.isEmpty()) {
-                file_info->request_filename = fi.fileName();
-                if (file_info->request_filename.isEmpty()) {
-                    file_info->request_filename = "file";
+            if (file_info.request_filename == nullptr || file_info.request_filename.isEmpty()) {
+                file_info.request_filename = fi.fileName();
+                if (file_info.request_filename.isEmpty()) {
+                    file_info.request_filename = "file";
                 }
             }
 
@@ -210,14 +212,14 @@ void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
 
             // add header
             request_content.append(QString("Content-Disposition: form-data; %1; %2").arg(
-                http_attribute_encode("name", file_info->variable_name),
-                http_attribute_encode("filename", file_info->request_filename)
+                http_attribute_encode("name", file_info.variable_name),
+                http_attribute_encode("filename", file_info.request_filename)
             ));
             request_content.append(new_line);
 
-            if (file_info->mime_type != nullptr && !file_info->mime_type.isEmpty()) {
+            if (file_info.mime_type != nullptr && !file_info.mime_type.isEmpty()) {
                 request_content.append("Content-Type: ");
-                request_content.append(file_info->mime_type);
+                request_content.append(file_info.mime_type);
                 request_content.append(new_line);
             }
 
@@ -232,6 +234,7 @@ void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
             request_content.append(new_line);
 
             file.close();
+            isFormData = true;
         }
 
         // add end of body
@@ -263,6 +266,9 @@ void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
         request.setHeader(QNetworkRequest::ContentTypeHeader, "multipart/form-data; boundary=" + boundary);
     }
 
+    qDebug() << "Request content:";
+    qDebug() << request_content;
+    
     if (input->http_method == "GET") {
         manager->get(request);
     }
@@ -282,10 +288,10 @@ void {{prefix}}HttpRequestWorker::execute({{prefix}}HttpRequestInput *input) {
         QBuffer buff(&request_content);
         manager->sendCustomRequest(request, input->http_method.toLatin1(), &buff);
     }
-
 }
 
 void {{prefix}}HttpRequestWorker::on_manager_finished(QNetworkReply *reply) {
+    rawHeaderPairs = reply->rawHeaderPairs();
     error_type = reply->error();
     if (error_type == QNetworkReply::NoError) {
         response = reply->readAll();
@@ -298,3 +304,35 @@ void {{prefix}}HttpRequestWorker::on_manager_finished(QNetworkReply *reply) {
 
     emit on_execution_finished(this);
 }
+
+void {{prefix}}HttpRequestWorker::on_manager_authenticationRequired(QNetworkReply *reply, QAuthenticator *authenticator)
+{
+
+}
+
+void {{prefix}}HttpRequestWorker::on_manager_encrypted(QNetworkReply *reply)
+{
+
+}
+
+void {{prefix}}HttpRequestWorker::on_manager_networkAccessibleChanged(QNetworkAccessManager::NetworkAccessibility accessible)
+{
+
+}
+
+void {{prefix}}HttpRequestWorker::on_manager_preSharedKeyAuthenticationRequired(QNetworkReply *reply, QSslPreSharedKeyAuthenticator *authenticator)
+{
+
+}
+
+void {{prefix}}HttpRequestWorker::on_manager_proxyAuthenticationRequired(const QNetworkProxy &proxy, QAuthenticator *authenticator)
+{
+
+}
+
+void {{prefix}}HttpRequestWorker::on_manager_sslErrors(QNetworkReply *reply, const QList<QSslError> &errors)
+{
+
+}
+
+#include "moc_{{prefix}}HttpRequest.cpp"

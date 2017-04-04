@@ -1,20 +1,20 @@
 {{>licenseInfo}}
-#ifndef _Swagger_ModelFactory_H_
-#define _Swagger_ModelFactory_H_
+#ifndef _{{namespace}}_ModelFactory_H_
+#define _{{namespace}}_ModelFactory_H_
 
 #include <QString>
 #include <QMap>
 
 class QObject;
 
-namespace Swagger {
+namespace {{namespace}} {
 
   class {{prefix}}Object;
 
   class {{prefix}}ObjectFactory
   {
   	public:
-	  	typedef {{prefix}}Object* (*Create{{prefix}}ObjectCallback)(QObject *parent);
+	  	using Create{{prefix}}ObjectCallback = {{prefix}}Object* (*)(QObject *parent);
 	  	static {{prefix}}ObjectFactory &Get();
 
 	  	bool Register(const QString &id, Create{{prefix}}ObjectCallback createFn);
@@ -35,10 +35,10 @@ namespace Swagger {
 	    virtual ~{{prefix}}ObjectFactory();
 
 	private:
-    	typedef QMap<QString, Create{{prefix}}ObjectCallback> CallbackMap;
+    	using CallbackMap = QMap<QString, Create{{prefix}}ObjectCallback> ;
     	CallbackMap _callbacks;
   };
 
-} /* namespace Swagger */
+} /* namespace {{namespace}} */
 
 #endif /* ModelFactory_H_ */

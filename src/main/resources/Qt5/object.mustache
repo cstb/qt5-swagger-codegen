@@ -1,12 +1,12 @@
 {{>licenseInfo}}
-#ifndef _Swagger__{{prefix}}Object_H_
-#define _Swagger__{{prefix}}Object_H_
+#ifndef _{{namespace}}__{{prefix}}Object_H_
+#define _{{namespace}}__{{prefix}}Object_H_
 
 #include <QObject>
 #include <QJsonValue>
 #include <QJsonObject>
 
-namespace Swagger {
+namespace {{namespace}} {
 
 class {{prefix}}Object : public QObject {
 
@@ -14,7 +14,7 @@ class {{prefix}}Object : public QObject {
 
   public:
     {{prefix}}Object(QObject *parent) : QObject(parent) {}
-    virtual ~{{prefix}}Object() {}
+    virtual ~{{prefix}}Object() override = default;
 
     virtual QJsonObject asJsonObject() {
       return QJsonObject();

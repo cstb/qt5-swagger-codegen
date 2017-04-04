@@ -3,7 +3,7 @@
 #include "{{prefix}}Helpers.h"
 #include "{{prefix}}ModelFactory.h"
 
-{{#models}}{{#model}}#include <{{classname}}.h>
+{{#models}}{{#model}}#include "{{classname}}.h"
 {{/model}}{{/models}}
 
 #include <QString>
@@ -16,11 +16,11 @@
 
 #include <cassert>
 
-using namespace Swagger;
+using namespace {{namespace}};
 
 {{#models}}{{#model}}{{classname}} *create{{classname}}(QObject *parent)
 {
-    {{classname}} *o = static_cast<{{classname}}*>({{prefix}}ObjectFactory::Get().CreateSwgObject(parent, QString("{{classname}}")));
+    {{classname}} *o = static_cast<{{classname}}*>({{prefix}}ObjectFactory::Get().Create{{prefix}}Object(parent, QString("{{classname}}")));
     assert(o != nullptr);
     {{#vars}}
     {{#isString}}o->{{setter}}("{{name}}");{{/isString}}

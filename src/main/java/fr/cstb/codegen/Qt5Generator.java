@@ -11,14 +11,89 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+
+import com.google.common.base.Function;
+import com.google.common.collect.Lists;
+import com.samskivert.mustache.Mustache.Compiler;
+
+import io.swagger.codegen.examples.ExampleGenerator;
+import io.swagger.models.ArrayModel;
+import io.swagger.models.ComposedModel;
+import io.swagger.models.Model;
+import io.swagger.models.ModelImpl;
+import io.swagger.models.Operation;
+import io.swagger.models.RefModel;
+import io.swagger.models.Response;
+import io.swagger.models.Swagger;
+import io.swagger.models.auth.ApiKeyAuthDefinition;
+import io.swagger.models.auth.BasicAuthDefinition;
+import io.swagger.models.auth.In;
+import io.swagger.models.auth.OAuth2Definition;
+import io.swagger.models.auth.SecuritySchemeDefinition;
+import io.swagger.models.parameters.BodyParameter;
+import io.swagger.models.parameters.CookieParameter;
+import io.swagger.models.parameters.FormParameter;
+import io.swagger.models.parameters.HeaderParameter;
+import io.swagger.models.parameters.Parameter;
+import io.swagger.models.parameters.PathParameter;
+import io.swagger.models.parameters.QueryParameter;
+import io.swagger.models.parameters.SerializableParameter;
+import io.swagger.models.properties.AbstractNumericProperty;
+import io.swagger.models.properties.ArrayProperty;
+import io.swagger.models.properties.BaseIntegerProperty;
+import io.swagger.models.properties.BinaryProperty;
+import io.swagger.models.properties.BooleanProperty;
+import io.swagger.models.properties.ByteArrayProperty;
+import io.swagger.models.properties.DateProperty;
+import io.swagger.models.properties.DateTimeProperty;
+import io.swagger.models.properties.DecimalProperty;
+import io.swagger.models.properties.DoubleProperty;
+import io.swagger.models.properties.FileProperty;
+import io.swagger.models.properties.FloatProperty;
+import io.swagger.models.properties.IntegerProperty;
+import io.swagger.models.properties.LongProperty;
+import io.swagger.models.properties.MapProperty;
+import io.swagger.models.properties.Property;
+import io.swagger.models.properties.PropertyBuilder;
+import io.swagger.models.properties.PropertyBuilder.PropertyId;
+import io.swagger.models.properties.RefProperty;
+import io.swagger.models.properties.StringProperty;
+import io.swagger.models.properties.UUIDProperty;
+import io.swagger.util.Json;
+import org.apache.commons.lang3.StringEscapeUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.annotation.Nullable;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
-    protected final String PREFIX = "Swg";
+    protected final String PREFIX = "Indigo";
     protected Set<String> foundationClasses = new HashSet<String>();
     // source folder where to write the files
     protected String sourceFolder = "client";
     protected String apiVersion = "1.0.0";
     protected Map<String, String> namespaces = new HashMap<String, String>();
     protected Set<String> systemIncludes = new HashSet<String>();
+
+    public static final String NAMESPACE_NAME = "namespace";
+    public static final String NAMESPACE_NAME_DESC = "string, define C++ namespace in which all generated class will be defined, default is Swagger";
 
     public Qt5Generator() {
         super();
@@ -111,7 +186,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
         typeMapping.put("object", PREFIX + "Object");
         //TODO binary should be mapped to byte array
         // mapped to String as a workaround
-        typeMapping.put("binary", "QString");
+        typeMapping.put("binary", "QByteArray");
         typeMapping.put("ByteArray", "QByteArray");
 
         importMapping = new HashMap<String, String>();
@@ -131,6 +206,9 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
         systemIncludes.add("QDate");
         systemIncludes.add("QDateTime");
         systemIncludes.add("QByteArray");
+
+        //name formatting options
+        cliOptions.add(CliOption.newString(NAMESPACE_NAME, NAMESPACE_NAME_DESC).defaultValue("Swagger"));
     }
 
     /**
@@ -212,12 +290,12 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
 
     @Override
     public String toModelFilename(String name) {
-        return PREFIX + initialCaps(name);
+        return modelNamePrefix + initialCaps(name);
     }
 
     @Override
     public String toApiFilename(String name) {
-        return PREFIX + initialCaps(name) + "Api";
+        return modelNamePrefix + initialCaps(name) + "Api";
     }
 
     /**
@@ -327,7 +405,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
                 languageSpecificPrimitives.contains(type)) {
             return type;
         } else {
-            return PREFIX + Character.toUpperCase(type.charAt(0)) + type.substring(1);
+            return modelNamePrefix + Character.toUpperCase(type.charAt(0)) + type.substring(1);
         }
     }
 
@@ -343,7 +421,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
 
         // camelize (lower first character) the variable name
         // pet_id => petId
-        // name = camelize(name,true);
+        //name = camelize(name,true);
 
         // for reserved word or word starting with number, append _
         if (isReservedWord(name) || name.matches("^\\d.*")) {
@@ -355,7 +433,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
 
     @Override
     public String toApiName(String type) {
-        return PREFIX + Character.toUpperCase(type.charAt(0)) + type.substring(1) + "Api";
+        return modelNamePrefix + Character.toUpperCase(type.charAt(0)) + type.substring(1) + "Api";
     }
 
     @Override
@@ -380,7 +458,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
       // Give the base class a chance to process
       super.postProcessParameter(parameter);
 
-      boolean isObject = parameter.dataType.matches("^"+PREFIX+".*$");
+      boolean isObject = parameter.dataType.matches("^"+modelNamePrefix+".*$");
 
       parameter.vendorExtensions.put("isObject", isObject);
 
@@ -402,7 +480,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
 
       if (parameter.dataType.matches("^QList.*$"))
       {
-        parameter.vendorExtensions.put("isInnerObject", parameter.dataType.matches("^QList<"+PREFIX+".*$"));
+        parameter.vendorExtensions.put("isInnerObject", parameter.dataType.matches("^QList<"+modelNamePrefix+".*$"));
         System.out.println("parameter: " + parameter + " isInnerObject: " +parameter.vendorExtensions.get("isInnerObject"));
       }
     }
@@ -413,7 +491,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
       // Give the base class a chance to process
       super.postProcessModelProperty(model, property);
 
-      boolean isObject = property.datatype.matches("^"+PREFIX+".*$");
+      boolean isObject = property.datatype.matches("^"+modelNamePrefix+".*$");
 
       property.vendorExtensions.put("isObject", isObject);
 
@@ -435,7 +513,7 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
 
       if (property.datatype.matches("^QList.*$"))
       {
-        property.vendorExtensions.put("isInnerObject", property.datatype.matches("^QList<"+PREFIX+".*$"));
+        property.vendorExtensions.put("isInnerObject", property.datatype.matches("^QList<"+modelNamePrefix+".*$"));
         System.out.println("property: " + property + " isInnerObject: " +property.vendorExtensions.get("isInnerObject"));
       }
 
@@ -450,41 +528,58 @@ public class Qt5Generator extends DefaultCodegen implements CodegenConfig {
     public CodegenOperation fromOperation(String path, String httpMethod, Operation operation, Map<String, Model> definitions, Swagger swagger) {
       CodegenOperation op = super.fromOperation(path, httpMethod, operation, definitions, swagger);
 
-      if (op.returnType != null && op.returnType.matches("^QList.*$"))
+      if (op.returnType != null)
       {
-        op.vendorExtensions.put("isInnerObject", op.returnBaseType.matches(PREFIX+".*$"));
+        System.out.println("operation: " + op + " return type: " + op.returnType );
+        if (op.returnType.matches("^QList.*$"))
+        {
+            op.vendorExtensions.put("isInnerObject", op.returnBaseType.matches(modelNamePrefix+".*$"));
 
-        if (op.returnBaseType.matches("QDateTime"))
-          op.vendorExtensions.put("isDateTime", true);
-        else if (op.returnBaseType.matches("QDate"))
-          op.vendorExtensions.put("isDate", true);
-        else if (op.returnBaseType.matches("QString"))
-          op.vendorExtensions.put("isString", true);
-        else if (op.returnBaseType.matches("qint32"))
-          op.vendorExtensions.put("isInteger", true);
-        else if (op.returnBaseType.matches("qint64"))
-          op.vendorExtensions.put("isLong", true);
-        else if (op.returnBaseType.matches("bool"))
-          op.vendorExtensions.put("isBool", true);
-        else if (op.returnBaseType.matches("double"))
-          op.vendorExtensions.put("isDouble", true);
-        else if (op.returnBaseType.matches("float"))
-          op.vendorExtensions.put("isFloat", true);
-
-        System.out.println("operation: " + op + " isInnerObject: " +op.vendorExtensions.get("isInnerObject") );
-
-
+            if (op.returnBaseType.matches("QDateTime"))
+              op.vendorExtensions.put("isDateTime", true);
+            else if (op.returnBaseType.matches("QDate"))
+              op.vendorExtensions.put("isDate", true);
+            else if (op.returnBaseType.matches("QString"))
+              op.vendorExtensions.put("isString", true);    
+            else if (op.returnBaseType.matches("qint32"))
+              op.vendorExtensions.put("isInteger", true);    
+            else if (op.returnBaseType.matches("qint64"))
+              op.vendorExtensions.put("isLong", true);    
+            else if (op.returnBaseType.matches("bool"))
+              op.vendorExtensions.put("isBool", true);    
+            else if (op.returnBaseType.matches("double"))
+              op.vendorExtensions.put("isDouble", true);    
+            else if (op.returnBaseType.matches("float"))
+              op.vendorExtensions.put("isFloat", true);  
+            System.out.println("operation: " + op + " isInnerObject: " +op.vendorExtensions.get("isInnerObject") );
+        }
+        else if (op.returnType.matches("^" + modelNamePrefix + "HttpRequestInputFileElement.*$"))
+        {
+            System.out.println("Adding isFile to vendorExtensions ");
+            op.vendorExtensions.put("isFile", true);
+        }
       }
+
       return op;
     }
-
+  
     @Override
     protected void updatePropertyForArray(CodegenProperty property, CodegenProperty innerProperty) {
         super.updatePropertyForArray(property, innerProperty);
-        boolean isObject = property.datatype.matches("^"+PREFIX+".*$");
+        boolean isObject = property.datatype.matches("^"+modelNamePrefix+".*$");
         property.vendorExtensions.put("isInnerObject", isObject);
         System.out.println("updatePropertyForArray: " + property + " isInnerObject: " +property.vendorExtensions.get("isInnerObject") );
 
     }
 
+    @Override
+    public CodegenResponse fromResponse(String responseCode, Response response) {
+      CodegenResponse r = super.fromResponse(responseCode, response);
+      if (r.schema != null)
+      {
+        System.out.println(r);
+      }
+
+      return r;
+    }
 }
